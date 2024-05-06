@@ -29,8 +29,8 @@
 #ifndef _ci_lab_perfids_h_
 #define _ci_lab_perfids_h_
 
-#define CI_LAB_MAIN_TASK_PERF_ID  32
-#define CI_LAB_SOCKET_RCV_PERF_ID 33
+#define CI_LAB_MAIN_TASK_PERF_ID  53
+#define CI_LAB_SOCKET_RCV_PERF_ID 54
 
 #endif /* _ci_lab_perfids_h_ */
 
