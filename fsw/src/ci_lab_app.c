@@ -35,6 +35,7 @@
 #include "ci_lab_msg.h"
 #include "ci_lab_events.h"
 #include "ci_lab_version.h"
+#include "libs/spacey.h"
 
 /*
 ** CI global data...
@@ -50,6 +51,9 @@ typedef struct
     CI_LAB_HkTlm_t HkTlm;
 
     CFE_SB_Buffer_t *NextIngestBufPtr;
+
+    // UART
+    CFE_SB_Buffer_t *NextUARTIngestBufPtr;
 
 } CI_LAB_GlobalData_t;
 
@@ -74,6 +78,7 @@ int32 CI_LAB_ResetCounters(const CI_LAB_ResetCountersCmd_t *data);
 
 /* Housekeeping message handler */
 int32 CI_LAB_ReportHousekeeping(const CFE_MSG_CommandHeader_t *data);
+void CI_LAB_ReadUART(void);
 
 /** * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* CI_Lab_AppMain() -- Application entry point and main process loop          */
@@ -117,8 +122,10 @@ void CI_Lab_AppMain(void)
         {
             CI_LAB_ReadUpLink();
         }
-    }
 
+        CI_LAB_ReadUART();
+    }
+    printf("CI LAB EXITING\n");
     CFE_ES_ExitApp(RunStatus);
 
 } /* End of CI_Lab_AppMain() */
@@ -132,6 +139,9 @@ void CI_LAB_delete_callback(void)
 {
     OS_printf("CI delete callback -- Closing CI Network socket.\n");
     OS_close(CI_LAB_Global.SocketID);
+
+    OS_printf("CI LAB CLOSING UART SOCKET\n");
+    SPACEY_LIB_UART_CLOSE();
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  */
@@ -180,6 +190,8 @@ void CI_LAB_TaskInit(void)
     }
 
     CI_LAB_ResetCounters_Internal();
+
+    status = SPACEY_LIB_UART_INIT();
 
     /*
     ** Install the delete handler
@@ -438,3 +450,34 @@ bool CI_LAB_VerifyCmdLength(CFE_MSG_Message_t *MsgPtr, size_t ExpectedLength)
     return (result);
 
 } /* End of CI_LAB_VerifyCmdLength() */
+
+
+void CI_LAB_ReadUART(void)
+{
+    // Read from UART
+    char readbuf[CI_LAB_MAX_INGEST];
+    int32 readbufsize;
+    // Allocate a message buffer
+    CI_LAB_Global.NextUARTIngestBufPtr = CFE_SB_AllocateMessageBuffer(CI_LAB_MAX_INGEST);
+    
+    if(CI_LAB_Global.NextUARTIngestBufPtr == NULL)
+    {
+        CFE_EVS_SendEvent(CI_LAB_INGEST_ALLOC_ERR_EID, CFE_EVS_EventType_ERROR, "CI: L%d, UART buffer allocation failed\n", __LINE__);
+        return;
+    }
+
+    readbufsize = SPACEY_LIB_UART_READ_EXACT_CHARS(readbuf, CI_LAB_MAX_INGEST);
+
+    if(readbufsize >= (int32)sizeof(CFE_MSG_CommandHeader_t) && readbufsize <= ((int32)CI_LAB_MAX_INGEST))
+    {
+        CFE_ES_PerfLogEntry(CI_LAB_SOCKET_RCV_PERF_ID);
+        CI_LAB_Global.HkTlm.Payload.IngestPackets++;
+        memcpy(CI_LAB_Global.NextUARTIngestBufPtr->Msg.Byte, readbuf, sizeof(readbuf));
+        SPACEY_LIB_PRINT_BUFFER_IN_HEX(readbuf, readbufsize);
+
+        CFE_SB_TransmitBuffer(CI_LAB_Global.NextUARTIngestBufPtr, false);
+        CFE_ES_PerfLogExit(CI_LAB_SOCKET_RCV_PERF_ID);
+    }
+
+    return;
+}

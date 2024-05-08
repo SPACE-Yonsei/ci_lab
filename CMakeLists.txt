@@ -4,8 +4,10 @@ project(CFS_CI_LAB C)
 include_directories(fsw/mission_inc)
 include_directories(fsw/platform_inc)
 
+
 aux_source_directory(fsw/src APP_SRC_FILES)
 
 # Create the app module
 add_cfe_app(ci_lab ${APP_SRC_FILES})
 
+add_cfe_app_dependency(ci_lab spacey_lib)
