@@ -54,6 +54,7 @@ typedef struct
 
     // UART
     CFE_SB_Buffer_t *NextUARTIngestBufPtr;
+    bool UARTConnected;
 
 } CI_LAB_GlobalData_t;
 
@@ -109,7 +110,6 @@ void CI_Lab_AppMain(void)
 
         /* Pend on receipt of command packet -- timeout set to 500 millisecs */
         status = CFE_SB_ReceiveBuffer(&SBBufPtr, CI_LAB_Global.CommandPipe, 500);
-
         CFE_ES_PerfLogEntry(CI_LAB_MAIN_TASK_PERF_ID);
 
         if (status == CFE_SUCCESS)
@@ -191,8 +191,23 @@ void CI_LAB_TaskInit(void)
 
     CI_LAB_ResetCounters_Internal();
 
+    /*
+     * User Defined Initialization
+    */
+
+    // Init UART Port
     status = SPACEY_LIB_UART_INIT();
 
+    // Expected Error, If UART is already connected and UART_INIT is called again, it will return ERROR. To be fixed?
+
+    if (status == CFE_SUCCESS)
+    {
+        CI_LAB_Global.UARTConnected = true;
+    }
+    else
+    {
+        CI_LAB_Global.UARTConnected = false;
+    }
     /*
     ** Install the delete handler
     */
@@ -358,6 +373,8 @@ void CI_LAB_ResetCounters_Internal(void)
 /* CI_LAB_ReadUpLink() --                                                     */
 /*                                                                            */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * **/
+
+
 void CI_LAB_ReadUpLink(void)
 {
     int    i;
@@ -376,7 +393,7 @@ void CI_LAB_ReadUpLink(void)
                 break;
             }
         }
-
+        
         status = OS_SocketRecvFrom(CI_LAB_Global.SocketID, CI_LAB_Global.NextIngestBufPtr, CI_LAB_MAX_INGEST,
                                    &CI_LAB_Global.SocketAddress, OS_CHECK);
         if (status >= (int32)sizeof(CFE_MSG_CommandHeader_t) && status <= ((int32)CI_LAB_MAX_INGEST))
@@ -454,11 +471,13 @@ bool CI_LAB_VerifyCmdLength(CFE_MSG_Message_t *MsgPtr, size_t ExpectedLength)
 
 void CI_LAB_ReadUART(void)
 {
-    // Read from UART
-    char readbuf[CI_LAB_MAX_INGEST];
-    int32 readbufsize;
+    int32 status;
     // Allocate a message buffer
-    CI_LAB_Global.NextUARTIngestBufPtr = CFE_SB_AllocateMessageBuffer(CI_LAB_MAX_INGEST);
+    if(CI_LAB_Global.NextUARTIngestBufPtr == NULL)
+    {
+        printf("Msg pointer is NULL, creating one\n");
+        CI_LAB_Global.NextUARTIngestBufPtr = CFE_SB_AllocateMessageBuffer(CI_LAB_MAX_INGEST);
+    }
     
     if(CI_LAB_Global.NextUARTIngestBufPtr == NULL)
     {
@@ -466,18 +485,11 @@ void CI_LAB_ReadUART(void)
         return;
     }
 
-    readbufsize = SPACEY_LIB_UART_READ_EXACT_CHARS(readbuf, CI_LAB_MAX_INGEST);
+    status = SPACEY_LIB_UART_READ_COMMAND(CI_LAB_Global.NextUARTIngestBufPtr);
 
-    if(readbufsize >= (int32)sizeof(CFE_MSG_CommandHeader_t) && readbufsize <= ((int32)CI_LAB_MAX_INGEST))
+    if(status == CFE_SUCCESS)
     {
-        CFE_ES_PerfLogEntry(CI_LAB_SOCKET_RCV_PERF_ID);
-        CI_LAB_Global.HkTlm.Payload.IngestPackets++;
-        memcpy(CI_LAB_Global.NextUARTIngestBufPtr->Msg.Byte, readbuf, sizeof(readbuf));
-        SPACEY_LIB_PRINT_BUFFER_IN_HEX(readbuf, readbufsize);
-
         CFE_SB_TransmitBuffer(CI_LAB_Global.NextUARTIngestBufPtr, false);
-        CFE_ES_PerfLogExit(CI_LAB_SOCKET_RCV_PERF_ID);
     }
-
     return;
 }
