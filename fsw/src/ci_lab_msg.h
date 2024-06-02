@@ -29,6 +29,8 @@
 #ifndef _ci_lab_msg_h_
 #define _ci_lab_msg_h_
 
+#include "libs/spacey.h"
+
 /*
 ** CI_LAB command codes
 */
@@ -77,6 +79,12 @@ typedef struct
     CFE_MSG_TelemetryHeader_t TlmHeader;
     CI_LAB_HkTlm_Payload_t    Payload;
 } CI_LAB_HkTlm_t;
+
+typedef struct
+{
+    CFE_MSG_TelemetryHeader_t TlmHeader;
+    CI_LAB_ECHO_Data_t Payload;
+} CI_LAB_ECHO_TLM_Data_t;
 
 #endif /* _ci_lab_msg_h_ */
 

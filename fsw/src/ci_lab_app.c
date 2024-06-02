@@ -56,6 +56,9 @@ typedef struct
     CFE_SB_Buffer_t *NextUARTIngestBufPtr;
     bool UARTConnected;
 
+    // ECHO
+    CI_LAB_ECHO_TLM_Data_t ECHO_TLM_Data;
+
 } CI_LAB_GlobalData_t;
 
 CI_LAB_GlobalData_t CI_LAB_Global;
@@ -80,6 +83,8 @@ int32 CI_LAB_ResetCounters(const CI_LAB_ResetCountersCmd_t *data);
 /* Housekeeping message handler */
 int32 CI_LAB_ReportHousekeeping(const CFE_MSG_CommandHeader_t *data);
 void CI_LAB_ReadUART(void);
+int32 CI_LAB_PROCESS_ECHO(void);
+
 
 /** * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 /* CI_Lab_AppMain() -- Application entry point and main process loop          */
@@ -91,6 +96,15 @@ void CI_LAB_ReadUART(void);
 /*            and acts accordingly to process them.                           */
 /*                                                                            */
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  * *  * * * * **/
+
+int32 CI_LAB_PROCESS_ECHO(void)
+{  
+    CFE_SB_TimeStampMsg(&CI_LAB_Global.ECHO_TLM_Data.TlmHeader.Msg);
+    CFE_SB_TransmitMsg(&CI_LAB_Global.ECHO_TLM_Data.TlmHeader.Msg, true);
+
+    return CFE_SUCCESS;
+}
+
 void CI_Lab_AppMain(void)
 {
     int32            status;
@@ -160,8 +174,8 @@ void CI_LAB_TaskInit(void)
                      CFE_EVS_EventFilter_BINARY);
 
     CFE_SB_CreatePipe(&CI_LAB_Global.CommandPipe, CI_LAB_PIPE_DEPTH, "CI_LAB_CMD_PIPE");
-    CFE_SB_Subscribe(CI_LAB_CMD_MID, CI_LAB_Global.CommandPipe);
-    CFE_SB_Subscribe(CI_LAB_SEND_HK_MID, CI_LAB_Global.CommandPipe);
+    CFE_SB_Subscribe(CI_LAB_MID_GROUNDCMD_REQ, CI_LAB_Global.CommandPipe);
+    CFE_SB_Subscribe(CI_LAB_MID_HOUSEKEEPING_REQ, CI_LAB_Global.CommandPipe);
 
     status = OS_SocketOpen(&CI_LAB_Global.SocketID, OS_SocketDomain_INET, OS_SocketType_DATAGRAM);
     if (status != OS_SUCCESS)
@@ -213,10 +227,17 @@ void CI_LAB_TaskInit(void)
     */
     OS_TaskInstallDeleteHandler(&CI_LAB_delete_callback);
 
-    CFE_MSG_Init(&CI_LAB_Global.HkTlm.TlmHeader.Msg, CI_LAB_HK_TLM_MID, sizeof(CI_LAB_Global.HkTlm));
+    CFE_MSG_Init(&CI_LAB_Global.HkTlm.TlmHeader.Msg, CI_LAB_MID_HOUSEKEEPING_RES, sizeof(CI_LAB_Global.HkTlm));
 
     CFE_EVS_SendEvent(CI_LAB_STARTUP_INF_EID, CFE_EVS_EventType_INFORMATION, "CI Lab Initialized.%s",
                       CI_LAB_VERSION_STRING);
+
+    //USER DEFINED INITIALIZATION
+
+    //subscribe to echo data request
+    CFE_SB_Subscribe(CI_LAB_MID_ECHO_DATA_REQ, CI_LAB_Global.CommandPipe);
+
+    CI_LAB_ECHO_InitData(&CI_LAB_Global.ECHO_TLM_Data.Payload);
 
 } /* End of CI_LAB_TaskInit() */
 
@@ -240,12 +261,15 @@ void CI_LAB_ProcessCommandPacket(CFE_SB_Buffer_t *SBBufPtr)
 
     switch (CFE_SB_MsgIdToValue(MsgId))
     {
-        case CI_LAB_CMD_MID:
+        case CI_LAB_MID_GROUNDCMD_REQ:
             CI_LAB_ProcessGroundCommand(SBBufPtr);
             break;
 
-        case CI_LAB_SEND_HK_MID:
+        case CI_LAB_MID_HOUSEKEEPING_REQ:
             CI_LAB_ReportHousekeeping((const CFE_MSG_CommandHeader_t *)SBBufPtr);
+            break;
+        case CI_LAB_MID_ECHO_DATA_REQ:
+            CI_LAB_PROCESS_ECHO();
             break;
 
         default:

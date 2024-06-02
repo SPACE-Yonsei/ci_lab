@@ -29,10 +29,12 @@
 #ifndef _ci_lab_msgids_h_
 #define _ci_lab_msgids_h_
 
-#define CI_LAB_CMD_MID     0x1884
-#define CI_LAB_SEND_HK_MID 0x1885
+#define CI_LAB_MID_HOUSEKEEPING_REQ 0x1850 //Housekeeping Command
+#define CI_LAB_MID_GROUNDCMD_REQ    0x1851 //Ground Command
+#define CI_LAB_MID_ECHO_DATA_REQ	0x1852 //이 Command가 들어오면, 직전에 받은 Command를 출력한다.
 
-#define CI_LAB_HK_TLM_MID 0x0884
+#define CI_LAB_MID_HOUSEKEEPING_RES 0x0850 //Housekeeping Response
+#define CI_LAB_MID_ECHO_DATA_RES    0x0851 //직전에 받은 Command를 출력
 
 #endif /* _ci_lab_msgids_h_ */
 
