@@ -495,7 +495,6 @@ bool CI_LAB_VerifyCmdLength(CFE_MSG_Message_t *MsgPtr, size_t ExpectedLength)
 
 void CI_LAB_ReadUART(void)
 {
-    int32 status;
     // Allocate a message buffer
     if(CI_LAB_Global.NextUARTIngestBufPtr == NULL)
     {
@@ -508,12 +507,18 @@ void CI_LAB_ReadUART(void)
         CFE_EVS_SendEvent(CI_LAB_INGEST_ALLOC_ERR_EID, CFE_EVS_EventType_ERROR, "CI: L%d, UART buffer allocation failed\n", __LINE__);
         return;
     }
+    int32 chars_read;
+    chars_read = SPACEY_LIB_UART_READ_UNTIL_CARRIGE_RETURN(CI_LAB_Global.NextUARTIngestBufPtr);
+    printf("CI LAB : Chars Read: %d\n", chars_read);
+    SPACEY_LIB_PRINT_BUFFER_IN_HEX((char *)CI_LAB_Global.NextUARTIngestBufPtr, chars_read);
+    SPACEY_LIB_SB_DEBUG(CI_LAB_Global.NextUARTIngestBufPtr);
 
-    status = SPACEY_LIB_UART_READ_COMMAND(CI_LAB_Global.NextUARTIngestBufPtr);
-
-    if(status == CFE_SUCCESS)
+    if(chars_read > 8)
     {
         CFE_SB_TransmitBuffer(CI_LAB_Global.NextUARTIngestBufPtr, false);
     }
+
+    // Empty the buffer
+    CI_LAB_Global.NextUARTIngestBufPtr = NULL;
     return;
 }
